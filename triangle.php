@@ -129,9 +129,13 @@ class triangle
     }
 
     #$this->db->t1where('image', 'image_id < ?', [$blog->blog_id]);
-    public function t1where($t1, $keys, $values = [], $mode = 0, $fetch= 0)
+    #$this->db->t1where('image', "image_name LIKE ?", ["%$variable%"]);
+    #$this->db->t1where('image', 'image_id < ?', [$blog->blog_id], false, false, ['user_id']);
+    public function t1where($t1, $keys, $values = [], $mode = 0, $fetch = 0, $excepts = [])
     {
-        $stmt = $this->db->prepare("SELECT * FROM $t1 WHERE $keys");
+        $stmt = $this->db->prepare(!$excepts ? "SELECT * FROM $t1 WHERE $keys"
+            : "SELECT {$this->helper->comma_separated($excepts)} FROM $t1 WHERE $keys");
+
         $stmt->execute(array_values($values));
         return $this->fetch($stmt, $mode, $fetch);
     }
@@ -145,7 +149,7 @@ class triangle
         return $this->fetch($stmt, $mode, $fetch);
     }
     
-    #$this->db->t1where('image', 'image_id < ?', [$blog->blog_id]);
+    #$this->db->t1count('image', 'image_id < ?', [$blog->blog_id]);
     public function t1count($t1, $keys, $values = [], $mode = 0, $fetch= 0)
     {
         $stmt = $this->db->prepare("SELECT COUNT({$t1}_id) as count FROM $t1 WHERE $keys");
@@ -162,11 +166,22 @@ class triangle
     }
 
     #$db->t2where('article', 'category', 'article_id = ? and category.category_id = ?', ['10', '11']);
-    public function t2where($t1, $t2, $keys, $values = [], $mode = 0, $fetch = 0)
+    public function t2where($t1, $t2, $keys, $values = [], $mode = 0, $fetch = 0, $excepts = [])
     {
-        $stmt = $this->db->prepare("SELECT $t2.*, $t1.* FROM $t1 
-            INNER JOIN $t2 ON $t1.{$t2}_id = $t2.{$t2}_id WHERE $keys
-        "); $stmt->execute(array_values($values));
+        $stmt = $this->db->prepare(!$excepts ? "SELECT $t2.*, $t1.* FROM $t1 
+            INNER JOIN $t2 ON $t1.{$t2}_id = $t2.{$t2}_id WHERE $keys" 
+            : "SELECT {$this->helper->comma_separated($excepts)} FROM $t1 
+            INNER JOIN $t2 ON $t1.{$t2}_id = $t2.{$t2}_id WHERE $keys");
+        $stmt->execute(array_values($values));
+        return $this->fetch($stmt, $mode, $fetch);
+    }
+
+    #$this->db->t1count('image', 'image_id < ?', [$blog->blog_id]);
+    public function t2count($t1, $t2, $keys, $values = [], $mode = 0, $fetch= 0)
+    {
+        $stmt = $this->db->prepare("SELECT COUNT({$t1}_id) as count FROM $t1 
+            INNER JOIN $t2 ON $t1.{$t2}_id = $t2.{$t2}_id WHERE $keys");
+        $stmt->execute(array_values($values));
         return $this->fetch($stmt, $mode, $fetch);
     }
 
@@ -217,24 +232,33 @@ class triangle
 
         }
     }
-
+    /*qqq*/
     // $this->db->update('user', $data, ['id' => 'user_id']);
+    /* $this->db->update('article', ['article.category_id' => 4, 'category_id' => 1, ], ['id' => 'category_id', 'p2' => 'category_id']); */
     public function update($t1, $values, $p1 = [])
     {
         try {
-            
+
             $id = $values[$p1['id']];
-            
+
+            if(isset($p1['p2'])){
+                $p2 = $values[$p1['p2']];
+                unset($values[$p1['p2']]);
+            }
+
             unset($values[$p1['id']]);
             
             $execute = $values;
             
             $execute += [$p1['id'] => $id];
+    
+            if(isset($p1['p2'])){
+                $execute += [$p1['p2'] => $p2];
+            }
 
             $stmt = $this->db->prepare("UPDATE $t1 SET {$this->helper->keys($values)} WHERE {$p1['id']}=?");
-
             $stmt->execute(array_values($execute));
-            
+
             return $this->return($stmt);
 
         } catch (Exception $e) {
@@ -242,6 +266,35 @@ class triangle
             return ['status' => FALSE, 'error' => $e->getMessage()];
         }
     }
+
+    #$this->db->increment('post', 'post_hit', 18, 2);
+    public function increment($t1, $p1, $id, $p2 = 1)
+    {
+        try {
+            $stmt = $this->db->query("UPDATE $t1 SET $p1 = $p1 + $p2 WHERE {$t1}_id={$id}");
+
+            return $this->return($stmt);
+
+        } catch (Exception $e) {
+
+            return ['status' => FALSE, 'error' => $e->getMessage()];
+        }
+    }
+
+    #$this->db->increment('post', 'post_hit', 18, 2);
+    public function decrement($t1, $p1, $id, $p2 = 1)
+    {
+        try {
+            $stmt = $this->db->query("UPDATE $t1 SET $p1 = $p1 - $p2 WHERE {$t1}_id={$id}");
+
+            return $this->return($stmt);
+
+        } catch (Exception $e) {
+
+            return ['status' => FALSE, 'error' => $e->getMessage()];
+        }
+    }
+
 
     #$this->db->delete('sms', ['sms_recipient' => '994519467158'], ['id' => 'sms_recipient']);
     public function delete($t1, $values = [], $p1 = [])
@@ -316,13 +369,30 @@ class triangle
     public function __destruct(){
         $this->db = null;
     }
-}
 
-/*
-const DBHOST = '127.0.0.1';
-const DBNAME = 'code';
-const UTF    = 'charset=utf8';
-const DBUSER = 'root';
-const DBPASS = '';
-$db = new library\triangle();
-*/
+    #$this->db->p3where('article', 'user', 'category', 'article_id=?', [1], 0, 0, ['article.*']);
+    public function p3where($t1, $t2, $t3, $keys, $values, $mode = 0, $fetch = 0, $excepts = [])
+    {
+        $sql = !$excepts 
+            ? "$t3.*, $t2.*, $t1.*" 
+            : "{$this->helper->comma_separated($excepts)}";
+
+        $stmt = $this->db->prepare("SELECT {$sql} FROM $t1 
+            INNER JOIN $t2 ON $t2.{$t2}_id = $t1.{$t2}_id
+            INNER JOIN $t3 ON $t3.{$t3}_id = $t1.{$t3}_id
+            WHERE $keys"); 
+        $stmt->execute(array_values($values));
+        return $this->fetch($stmt, $mode, $fetch);
+    }
+
+    // $this->db->p3count('article', 'user', 'category', 'article_status=1', []);
+    public function p3count($t1, $t2, $t3, $keys, $values = [], $mode = 0, $fetch= 0)
+    {
+        $stmt = $this->db->prepare("SELECT COUNT({$t1}_id) as count FROM $t1 
+            INNER JOIN $t2 ON $t2.{$t2}_id = $t1.{$t2}_id
+            INNER JOIN $t3 ON $t3.{$t3}_id = $t1.{$t3}_id
+            WHERE $keys");
+        $stmt->execute(array_values($values));
+        return $this->fetch($stmt, $mode, $fetch);
+    }
+}
